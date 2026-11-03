@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "entities": [
+    {
+      "name": "product",
+      "table": "products",
+      "create_values": {
+        "id": 990001,
+        "sku": "GEN-KB-990001",
+        "category_id": 1,
+        "name": "Generated Keyboard",
+        "price_cents": 2599,
+        "stock_units": 8
+      },
+      "update_column": "stock_units",
+      "update_value": 7
+    }
+  ]
+}

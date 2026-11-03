@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dbeval/project.schema.json",
+  "title": "DBEval Project",
+  "type": "object",
+  "required": ["schema_version", "project_id", "software", "database", "dimension_weights"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "project_id": {"type": "string", "minLength": 1},
+    "software": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string"},
+        "description": {"type": "string"},
+        "artifact_path": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "database": {
+      "type": "object",
+      "required": ["backend"],
+      "properties": {
+        "backend": {"enum": ["sqlite", "postgresql", "mysql", "custom"]},
+        "adapter_plugin": {
+          "type": "string",
+          "description": "Python module exporting register(registry) and registering an adapter for backend."
+        },
+        "path": {"type": "string"},
+        "dsn": {"type": "string"},
+        "initialize": {
+          "type": "object",
+          "properties": {
+            "schema": {"type": "string"},
+            "seed": {"type": "string"},
+            "migrations": {"type": "array", "items": {"type": "string"}}
+          },
+          "additionalProperties": true
+        },
+        "container": {
+          "type": "object",
+          "description": "Opaque, version-pinned Testcontainers configuration for a backend adapter.",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": {"type": "boolean"}
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": {"type": "string"},
+          "role": {"type": "string"},
+          "required": {"type": "boolean"},
+          "version": {"type": "string"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "dimension_weights": {
+      "type": "object",
+      "required": ["DB1", "DB2", "DB3", "DB4", "DB5", "DB6", "DB7", "DB8"],
+      "additionalProperties": false,
+      "properties": {
+        "DB1": {"type": "number", "minimum": 0},
+        "DB2": {"type": "number", "minimum": 0},
+        "DB3": {"type": "number", "minimum": 0},
+        "DB4": {"type": "number", "minimum": 0},
+        "DB5": {"type": "number", "minimum": 0},
+        "DB6": {"type": "number", "minimum": 0},
+        "DB7": {"type": "number", "minimum": 0},
+        "DB8": {"type": "number", "minimum": 0}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "properties": {
+        "require_frozen_gold": {"type": "boolean"},
+        "signing_key_env": {"type": "string"},
+        "case_timeout_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "busy_timeout_seconds": {"type": "number", "exclusiveMinimum": 0}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

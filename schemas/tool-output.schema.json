@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dbeval/tool-output.schema.json",
+  "title": "DBEval Normalized Tool Output",
+  "type": "object",
+  "properties": {
+    "tool": {"type": "string"},
+    "tool_version": {"type": "string"},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "title"],
+        "properties": {
+          "id": {"type": "string"},
+          "severity": {"enum": ["info", "low", "medium", "high", "critical"]},
+          "title": {"type": "string"},
+          "evidence": {"type": "string"},
+          "location": {"type": "string"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "measurements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "value", "unit"],
+        "properties": {
+          "name": {"type": "string"},
+          "value": {"type": "number"},
+          "unit": {"type": "string"},
+          "sample_count": {"type": "integer", "minimum": 0}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

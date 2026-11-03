@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "project_id": "sqlite-inventory-reference",
+  "software": {
+    "name": "inventory-reference",
+    "version": "1.0.0",
+    "description": "A database-only reference project for exercising the evaluator."
+  },
+  "database": {
+    "backend": "sqlite",
+    "path": "data/inventory.sqlite3",
+    "initialize": {
+      "schema": "schema.sql",
+      "seed": "seed.sql"
+    }
+  },
+  "features": {
+    "backup_restore": true,
+    "read_only_connection": true,
+    "application_api": false,
+    "orm": false
+  },
+  "tools": [
+    {
+      "id": "sqlite3",
+      "role": "native_integrity_and_readonly_probe",
+      "required": true
+    }
+  ],
+  "dimension_weights": {
+    "DB1": 1.0,
+    "DB2": 1.0,
+    "DB3": 1.0,
+    "DB4": 1.0,
+    "DB5": 1.0,
+    "DB6": 1.0,
+    "DB7": 1.0,
+    "DB8": 1.0
+  },
+  "execution": {
+    "require_frozen_gold": true,
+    "signing_key_env": "DBEVAL_GOLD_KEY",
+    "case_timeout_seconds": 30,
+    "busy_timeout_seconds": 5
+  }
+}

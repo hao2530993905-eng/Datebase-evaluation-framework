@@ -1,0 +1,830 @@
+{
+  "schema_version": "1.0",
+  "bundle_id": "inventory-reference-gold-v1",
+  "software": {
+    "name": "inventory-reference",
+    "version": "1.0.0"
+  },
+  "created_at": "2026-11-02T00:00:00Z",
+  "created_by": "reference fixture maintainers",
+  "dimension_weights": {
+    "DB1": 1.0,
+    "DB2": 1.0,
+    "DB3": 1.0,
+    "DB4": 1.0,
+    "DB5": 1.0,
+    "DB6": 1.0,
+    "DB7": 1.0,
+    "DB8": 1.0
+  },
+  "cases": [
+    {
+      "id": "DB1.schema.tables",
+      "dimension": "DB1",
+      "indicator": "DB1.1",
+      "title": "必需业务表存在",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('categories', 'products', 'orders', 'order_items') ORDER BY name",
+          "expect": {
+            "kind": "rows_equal",
+            "value": [
+              ["categories"],
+              ["order_items"],
+              ["orders"],
+              ["products"]
+            ]
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["file:acceptance.md", "file:schema.sql"],
+        "rationale": "验收依据明确列出四类业务实体，Schema 文件提供结构基线。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB1.schema.product_columns",
+      "dimension": "DB1",
+      "indicator": "DB1.1",
+      "title": "商品表字段与类型正确",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "SELECT name, type, \"notnull\", pk FROM pragma_table_info('products') ORDER BY cid",
+          "expect": {
+            "kind": "rows_equal",
+            "value": [
+              ["id", "INTEGER", 0, 1],
+              ["sku", "TEXT", 1, 0],
+              ["category_id", "INTEGER", 1, 0],
+              ["name", "TEXT", 1, 0],
+              ["price_cents", "INTEGER", 1, 0],
+              ["stock_units", "INTEGER", 1, 0]
+            ]
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["file:acceptance.md", "file:schema.sql#products"],
+        "rationale": "列顺序、声明类型、非空与主键属性均来自冻结前的设计基线。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB1.integrity.primary_key",
+      "dimension": "DB1",
+      "indicator": "DB1.2",
+      "title": "商品主键无重复",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "SELECT COUNT(*) FROM (SELECT id FROM products GROUP BY id HAVING COUNT(*) > 1)",
+          "expect": {
+            "kind": "scalar",
+            "value": 0
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["file:schema.sql#products", "rule:primary-key-uniqueness"],
+        "rationale": "主键唯一性是通用数据库完整规则，0 是独立定义的正确预期。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB1.constraint.negative_stock",
+      "dimension": "DB1",
+      "indicator": "DB1.2",
+      "title": "负库存写入被拒绝",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "INSERT INTO products(id, sku, category_id, name, price_cents, stock_units) VALUES (50, 'INVALID-STOCK', 1, 'Invalid stock', 100, -1)",
+          "expect": {
+            "kind": "error_contains",
+            "value": "CHECK constraint failed"
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["file:acceptance.md", "file:schema.sql#products"],
+        "rationale": "验收规则明确禁止负库存，预期由数据库约束保证。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB1.constraint.unique_sku",
+      "dimension": "DB1",
+      "indicator": "DB1.2",
+      "title": "重复商品 SKU 被拒绝",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "INSERT INTO products(id, sku, category_id, name, price_cents, stock_units) VALUES (51, 'KB-100', 1, 'Duplicate SKU', 100, 1)",
+          "expect": {
+            "kind": "error_contains",
+            "value": "UNIQUE constraint failed"
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["file:acceptance.md", "file:schema.sql#products"],
+        "rationale": "SKU 唯一性由需求和唯一约束共同定义。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB1.constraint.invalid_email",
+      "dimension": "DB1",
+      "indicator": "DB1.2",
+      "title": "无效订单邮箱被拒绝",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "INSERT INTO orders(id, customer_email, status, created_at) VALUES (2001, 'not-an-email', 'pending', '2026-01-01T00:00:00Z')",
+          "expect": {
+            "kind": "error_contains",
+            "value": "CHECK constraint failed"
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["file:acceptance.md", "file:schema.sql#orders"],
+        "rationale": "验收记录要求客户邮箱具备基本邮箱结构，并明确了状态枚举。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB1.integrity.foreign_key",
+      "dimension": "DB1",
+      "indicator": "DB1.3",
+      "title": "孤立订单项无法写入",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "INSERT INTO order_items(id, order_id, product_id, qty, unit_price_cents) VALUES (500, 999999, 1, 1, 100)",
+          "expect": {
+            "kind": "error_contains",
+            "value": "FOREIGN KEY constraint failed"
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["file:acceptance.md", "file:schema.sql#order_items", "rule:foreign-key-enforced"],
+        "rationale": "所有订单项必须引用有效订单；执行器为每个 SQLite 连接显式启用外键。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB2.query.order_aggregate",
+      "dimension": "DB2",
+      "indicator": "DB2.2",
+      "title": "订单明细聚合正确",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "SELECT o.id, o.status, COUNT(oi.id), SUM(oi.qty * oi.unit_price_cents) FROM orders o JOIN order_items oi ON oi.order_id = o.id GROUP BY o.id, o.status ORDER BY o.id",
+          "expect": {
+            "kind": "rows_equal",
+            "value": [
+              [1001, "pending", 2, 6298],
+              [1002, "paid", 1, 19999]
+            ]
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["file:acceptance.md", "file:seed.sql"],
+        "rationale": "Seed 是冻结的测试初始状态；订单聚合期望可由输入数据独立算出。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB2.query.pagination",
+      "dimension": "DB2",
+      "indicator": "DB2.2",
+      "title": "商品价格排序和分页稳定",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "SELECT sku, name FROM products ORDER BY price_cents DESC, sku ASC LIMIT 2 OFFSET 1",
+          "expect": {
+            "kind": "rows_equal",
+            "value": [
+              ["KB-100", "Mechanical Keyboard"],
+              ["BK-200", "Database Systems"]
+            ]
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["file:acceptance.md", "file:seed.sql"],
+        "rationale": "排序规则来自验收依据，期望顺序由初始价格数据计算，不读取当前分页输出。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB2.crud.update",
+      "dimension": "DB2",
+      "indicator": "DB2.1",
+      "title": "商品名称更新可读取",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "UPDATE products SET name = 'Reference Keyboard' WHERE id = 1",
+          "expect": {
+            "kind": "affected_rows",
+            "value": 1
+          }
+        },
+        {
+          "sql": "SELECT name, price_cents, stock_units FROM products WHERE id = 1",
+          "expect": {
+            "kind": "rows_equal",
+            "value": [
+              ["Reference Keyboard", 4999, 10]
+            ]
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["file:acceptance.md#crud", "file:seed.sql"],
+        "rationale": "单行更新后其余字段保持原值，操作前状态与预期结果均由 Gold 定义。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB2.workflow.delete_cascade",
+      "dimension": "DB2",
+      "indicator": "DB2.3",
+      "title": "删除订单级联删除订单项",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "DELETE FROM orders WHERE id = 1002",
+          "expect": {
+            "kind": "affected_rows",
+            "value": 1
+          }
+        },
+        {
+          "sql": "SELECT COUNT(*) FROM order_items WHERE order_id = 1002",
+          "expect": {
+            "kind": "scalar",
+            "value": 0
+          }
+        },
+        {
+          "sql": "SELECT COUNT(*) FROM orders",
+          "expect": {
+            "kind": "scalar",
+            "value": 1
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["file:acceptance.md#cascade", "file:schema.sql#order_items"],
+        "rationale": "级联删除是多步骤关联状态规则，预期由关系定义直接给出。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB3.transaction.rollback",
+      "dimension": "DB3",
+      "indicator": "DB3.1",
+      "title": "库存更新回滚后恢复原值",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "BEGIN",
+          "expect": {
+            "kind": "success",
+            "value": true
+          }
+        },
+        {
+          "sql": "UPDATE products SET stock_units = 99 WHERE id = 1",
+          "expect": {
+            "kind": "affected_rows",
+            "value": 1
+          }
+        },
+        {
+          "sql": "ROLLBACK",
+          "expect": {
+            "kind": "success",
+            "value": true
+          }
+        },
+        {
+          "sql": "SELECT stock_units FROM products WHERE id = 1",
+          "expect": {
+            "kind": "scalar",
+            "value": 10
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["file:acceptance.md#transactions", "rule:rollback-atomicity"],
+        "rationale": "回滚必须撤销事务内更新，初始库存由 Seed 明确定义为 10。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB3.transaction.failed_statement_cleanup",
+      "dimension": "DB3",
+      "indicator": "DB3.1",
+      "title": "失败写入后显式回滚清除整组操作",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "BEGIN",
+          "expect": {
+            "kind": "success",
+            "value": true
+          }
+        },
+        {
+          "sql": "INSERT INTO categories(id, name) VALUES (99, 'temporary')",
+          "expect": {
+            "kind": "affected_rows",
+            "value": 1
+          }
+        },
+        {
+          "sql": "INSERT INTO products(id, sku, category_id, name, price_cents, stock_units) VALUES (52, 'ATOMIC-FAIL', 99, 'Atomic failure', 100, -1)",
+          "expect": {
+            "kind": "error_contains",
+            "value": "CHECK constraint failed"
+          }
+        },
+        {
+          "sql": "ROLLBACK",
+          "expect": {
+            "kind": "success",
+            "value": true
+          }
+        },
+        {
+          "sql": "SELECT COUNT(*) FROM categories WHERE id = 99",
+          "expect": {
+            "kind": "scalar",
+            "value": 0
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["rule:atomicity", "file:schema.sql#products"],
+        "rationale": "显式事务包含一条有效和一条失败写入，回滚后整个事务必须不可见。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB3.transaction.commit",
+      "dimension": "DB3",
+      "indicator": "DB3.1",
+      "title": "已提交分类更新保持可见",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "BEGIN",
+          "expect": {
+            "kind": "success",
+            "value": true
+          }
+        },
+        {
+          "sql": "INSERT INTO categories(id, name) VALUES (98, 'committed category')",
+          "expect": {
+            "kind": "affected_rows",
+            "value": 1
+          }
+        },
+        {
+          "sql": "COMMIT",
+          "expect": {
+            "kind": "success",
+            "value": true
+          }
+        },
+        {
+          "sql": "SELECT name FROM categories WHERE id = 98",
+          "expect": {
+            "kind": "rows_equal",
+            "value": [
+              ["committed category"]
+            ]
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["rule:commit-visibility", "file:schema.sql#categories"],
+        "rationale": "成功提交后的新连接读取必须看到事务结果。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB3.concurrency.atomic_stock",
+      "dimension": "DB3",
+      "indicator": "DB3.2",
+      "title": "并发条件扣减不产生负库存",
+      "type": "concurrency",
+      "weight": 1.0,
+      "worker_sql": "UPDATE products SET stock_units = stock_units - 1 WHERE id = 1 AND stock_units > 0",
+      "verification_sql": "SELECT stock_units FROM products WHERE id = 1",
+      "expect": {
+        "kind": "scalar",
+        "value": 0
+      },
+      "workers": 5,
+      "iterations": 4,
+      "tolerated_errors": 0,
+      "provenance": {
+        "source_ids": ["file:acceptance.md#concurrency", "rule:no-negative-stock"],
+        "rationale": "20 次并发条件扣减从库存 10 开始，正确结果必须恰为 0，体现原子读改写。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB3.locking.detect_retry",
+      "dimension": "DB3",
+      "indicator": "DB3.3",
+      "title": "锁冲突可检测且有限重试成功",
+      "type": "command",
+      "weight": 1.0,
+      "command": ["python3", "tools/lock_conflict_probe.py", "${DB_PATH}"],
+      "cwd": "project_root",
+      "parse_json": true,
+      "expect": {
+        "kind": "json_path",
+        "path": "passed",
+        "value": true
+      },
+      "provenance": {
+        "source_ids": ["file:acceptance.md#locking", "file:tools/lock_conflict_probe.py"],
+        "rationale": "探针独立持锁并验证竞争者能识别锁冲突，随后在锁释放后重试成功。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB4.connection.read_write",
+      "dimension": "DB4",
+      "indicator": "DB4.1",
+      "title": "连接层可读写且探测后回滚",
+      "type": "health",
+      "weight": 1.0,
+      "check": "read_write",
+      "expect": {
+        "kind": "health_pass",
+        "value": true
+      },
+      "provenance": {
+        "source_ids": ["rule:connection-usability", "file:acceptance.md"],
+        "rationale": "连接必须能完成读取和事务写入；探针回滚以免污染测试初始状态。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB4.mapping.storage_types",
+      "dimension": "DB4",
+      "indicator": "DB4.2",
+      "title": "数值和日期字段存储映射稳定",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "SELECT typeof(price_cents), typeof(created_at) FROM products CROSS JOIN orders WHERE products.id = 1 AND orders.id = 1001",
+          "expect": {
+            "kind": "rows_equal",
+            "value": [
+              ["integer", "text"]
+            ]
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["file:schema.sql", "file:seed.sql"],
+        "rationale": "参考项目没有 ORM，因此只验证数据库驱动的标量映射，不宣称验证应用模型映射。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB4.migration.version",
+      "dimension": "DB4",
+      "indicator": "DB4.3",
+      "title": "Schema 版本为 1",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "PRAGMA user_version",
+          "expect": {
+            "kind": "scalar",
+            "value": 1
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["file:acceptance.md#schema-version", "file:schema.sql"],
+        "rationale": "验收依据明确要求 Schema 版本为 1。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB5.backup.data_integrity",
+      "dimension": "DB5",
+      "indicator": "DB5.1",
+      "title": "备份恢复后商品数据一致",
+      "type": "backup_restore",
+      "weight": 1.0,
+      "verification_sql": "SELECT COUNT(*), COALESCE(SUM(stock_units), 0) FROM products",
+      "expect": {
+        "kind": "rows_equal",
+        "value": [
+          [3, 35]
+        ]
+      },
+      "rpo_check_sql": "SELECT COUNT(*), COALESCE(SUM(stock_units), 0) FROM products",
+      "provenance": {
+        "source_ids": ["file:acceptance.md#backup", "file:seed.sql"],
+        "rationale": "备份点商品数量和库存总和由 Seed 独立定义，恢复库必须一致。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB5.recovery.abrupt_close",
+      "dimension": "DB5",
+      "indicator": "DB5.2",
+      "title": "异常关闭后未提交修改不泄漏",
+      "type": "command",
+      "weight": 1.0,
+      "command": ["python3", "tools/recovery_probe.py", "${DB_PATH}"],
+      "cwd": "project_root",
+      "parse_json": true,
+      "expect": {
+        "kind": "json_path",
+        "path": "passed",
+        "value": true
+      },
+      "provenance": {
+        "source_ids": ["file:tools/recovery_probe.py", "rule:uncommitted-rollback"],
+        "rationale": "探针在未提交状态下关闭连接并重开，验证库存回到事务前值且完整性正常。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB5.recovery.rto",
+      "dimension": "DB5",
+      "indicator": "DB5.3",
+      "title": "小规模备份恢复满足 RTO",
+      "type": "backup_restore",
+      "weight": 1.0,
+      "verification_sql": "SELECT COUNT(*) FROM products",
+      "expect": {
+        "kind": "scalar",
+        "value": 3
+      },
+      "rto_max_seconds": 2.0,
+      "scoring": {
+        "mode": "ramp",
+        "metric": "backup_restore_seconds",
+        "direction": "lower_is_better",
+        "target": 0.2,
+        "floor": 5.0
+      },
+      "provenance": {
+        "source_ids": ["file:acceptance.md#rto", "rule:reference-rto"],
+        "rationale": "参考基线设 2 秒硬上限，0.2 秒为满分目标，5 秒为连续评分零点。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB6.performance.read_latency",
+      "dimension": "DB6",
+      "indicator": "DB6.1",
+      "title": "典型联接查询延迟",
+      "type": "benchmark",
+      "weight": 1.0,
+      "sql": "SELECT o.id, COUNT(oi.id) FROM orders o JOIN order_items oi ON oi.order_id = o.id GROUP BY o.id ORDER BY o.id",
+      "warmup": 3,
+      "repeat": 30,
+      "thresholds": {
+        "p95_latency_ms": {
+          "max": 100.0
+        }
+      },
+      "scoring": {
+        "mode": "ramp",
+        "metric": "p95_latency_ms",
+        "direction": "lower_is_better",
+        "target": 10.0,
+        "floor": 100.0
+      },
+      "provenance": {
+        "source_ids": ["file:acceptance.md#performance", "rule:reference-slo"],
+        "rationale": "10 毫秒为参考满分目标，100 毫秒为不可接受上限，中间线性评分。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB6.performance.read_throughput",
+      "dimension": "DB6",
+      "indicator": "DB6.2",
+      "title": "单连接读取吞吐",
+      "type": "benchmark",
+      "weight": 1.0,
+      "sql": "SELECT sku, price_cents FROM products ORDER BY price_cents DESC LIMIT 2",
+      "warmup": 5,
+      "repeat": 50,
+      "thresholds": {
+        "throughput_ops_s": {
+          "min": 5.0
+        }
+      },
+      "scoring": {
+        "mode": "ramp",
+        "metric": "throughput_ops_s",
+        "direction": "higher_is_better",
+        "target": 100.0,
+        "floor": 5.0
+      },
+      "provenance": {
+        "source_ids": ["file:acceptance.md#performance", "rule:reference-slo"],
+        "rationale": "参考目标为 100 ops/s，最低可接受值为 5 ops/s；吞吐在两者间连续计分。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB6.performance.scale_and_resources",
+      "dimension": "DB6",
+      "indicator": "DB6.3",
+      "title": "递归查询规模增长与内存使用",
+      "type": "command",
+      "weight": 1.0,
+      "command": ["python3", "tools/resource_probe.py", "${DB_PATH}"],
+      "cwd": "project_root",
+      "parse_json": true,
+      "expect": {
+        "kind": "json_path",
+        "path": "passed",
+        "value": true
+      },
+      "scoring": {
+        "mode": "ramp",
+        "metric": "scale_growth_ratio",
+        "direction": "lower_is_better",
+        "target": 20.0,
+        "floor": 300.0
+      },
+      "provenance": {
+        "source_ids": ["file:tools/resource_probe.py", "rule:reference-scale-slo"],
+        "rationale": "150 倍数据量下查询增长目标为 20 倍，300 倍为零分上限；同时检查 RSS 增长。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB7.security.parameterized_query",
+      "dimension": "DB7",
+      "indicator": "DB7.1",
+      "title": "参数化查询阻止注入载荷扩大结果集",
+      "type": "sql",
+      "weight": 1.0,
+      "steps": [
+        {
+          "sql": "SELECT COUNT(*) FROM products WHERE sku = :sku",
+          "params": {
+            "sku": "KB-100' OR 1=1 --"
+          },
+          "expect": {
+            "kind": "scalar",
+            "value": 0
+          }
+        },
+        {
+          "sql": "SELECT COUNT(*) FROM products",
+          "expect": {
+            "kind": "scalar",
+            "value": 3
+          }
+        }
+      ],
+      "provenance": {
+        "source_ids": ["file:acceptance.md#security", "rule:parameterized-sql"],
+        "rationale": "注入载荷作为参数值必须按字面值处理，产品表不得被改变或返回全部行。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB7.access.read_only",
+      "dimension": "DB7",
+      "indicator": "DB7.2",
+      "title": "只读访问模式拒绝写入",
+      "type": "command",
+      "weight": 1.0,
+      "command": ["python3", "tools/readonly_probe.py", "${DB_PATH}"],
+      "cwd": "project_root",
+      "parse_json": true,
+      "expect": {
+        "kind": "json_path",
+        "path": "passed",
+        "value": true
+      },
+      "provenance": {
+        "source_ids": ["file:acceptance.md#security", "file:tools/readonly_probe.py"],
+        "rationale": "参考项目没有应用级角色模型，因此只验证连接权限边界；应用越权测试仍需专用 Adapter。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB7.security.static_scan",
+      "dimension": "DB7",
+      "indicator": "DB7.3",
+      "title": "静态规则未发现凭据泄漏和拼接执行",
+      "type": "command",
+      "weight": 1.0,
+      "command": ["python3", "tools/security_scan.py", "${PROJECT_ROOT}"],
+      "cwd": "project_root",
+      "parse_json": true,
+      "expect": {
+        "kind": "no_findings",
+        "value": true,
+        "min_severity": "low"
+      },
+      "provenance": {
+        "source_ids": ["file:tools/security_scan.py", "rule:no-hardcoded-credentials"],
+        "rationale": "使用规范化外部工具样例检查硬编码密码、带凭据 URL 和明显 SQL 拼接。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB8.health.integrity",
+      "dimension": "DB8",
+      "indicator": "DB8.1",
+      "title": "数据库内部完整性正常",
+      "type": "health",
+      "weight": 1.0,
+      "check": "integrity",
+      "expect": {
+        "kind": "health_pass",
+        "value": true
+      },
+      "provenance": {
+        "source_ids": ["rule:sqlite-integrity-check", "file:acceptance.md#health"],
+        "rationale": "SQLite PRAGMA integrity_check 必须返回 ok。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB8.health.foreign_keys",
+      "dimension": "DB8",
+      "indicator": "DB8.2",
+      "title": "外键检查没有违规行",
+      "type": "health",
+      "weight": 1.0,
+      "check": "foreign_keys",
+      "expect": {
+        "kind": "health_pass",
+        "value": true
+      },
+      "provenance": {
+        "source_ids": ["rule:foreign-key-check", "file:acceptance.md#health"],
+        "rationale": "PRAGMA foreign_key_check 必须无结果。",
+        "validation_status": "verified"
+      }
+    },
+    {
+      "id": "DB8.health.read_write",
+      "dimension": "DB8",
+      "indicator": "DB8.3",
+      "title": "数据库基础读写可用",
+      "type": "health",
+      "weight": 1.0,
+      "check": "read_write",
+      "expect": {
+        "kind": "health_pass",
+        "value": true
+      },
+      "provenance": {
+        "source_ids": ["rule:read-write-availability", "file:acceptance.md#health"],
+        "rationale": "数据库必须完成一次读取和可回滚写入探测。",
+        "validation_status": "verified"
+      }
+    }
+  ]
+}
